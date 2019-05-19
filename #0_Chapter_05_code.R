@@ -111,4 +111,48 @@ austen_dtm <- austen_books() %>%
   cast_dtm(book, word, n)
 
 
-  
+austen_dtm
+
+data("acq")
+acq[[1]]
+acq[[1]]$content
+
+acq_td <- tidy(acq)
+
+acq_tokens <- acq_td %>% 
+  select(-places) %>%
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words, by = "word")
+
+acq_tokens %>% 
+  count(word, sort = TRUE)
+
+#tf-idf
+
+tokens_sorted_tfidf <- acq_tokens %>% 
+  count(id, word) %>% 
+  bind_tf_idf(word, id, n) %>%
+  arrange(desc(tf_idf))
+
+company <- c("Microsoft", "Apple", "Google", "Amazon", "Facebook",
+             "Twitter", "IBM", "Yahoo", "Netflix")
+symbol <- c("MSFT", "AAPL", "GOOG", "AMZN", "FB", "TWTR", "IBM", "YHOO", "NFLX")
+
+
+
+
+download_articles <- function(symbol) {
+  WebCorpus(YahooNewsSource(paste0("NASDAQ:",symbol)))
+}
+
+stock_articles <- tibble(company = company,
+                         symbol = symbol) %>%
+  mutate(corpus = map(symbol, download_articles))
+
+
+stock_tokens <- stock_articles %>%
+  unnest(map(corpus, tidy)) %>%
+  unnest_tokens(word, text) %>%
+  select(company, datetimestamp, word, id, heading)
+
+stock_tokens
