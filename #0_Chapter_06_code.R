@@ -166,13 +166,87 @@ chapter_classifications %>%
   inner_join(book_topics, by = "topic") %>%
   filter(title != consensus)
 
+#By-Word assignments: augment
+
+assignments <- augment(chapters_lda, data = chapters_dtm)
+assignments 
+
+assignments <- assignments %>% 
+  separate(document, c("title", "chapter"), sep = "_", convert = TRUE) %>%
+  inner_join(book_topics, by = c(".topic" = "topic"))
+
+#my code to use the table command to see how the true title and the predicted title match up
+table(assignments$title, assignments$consensus)
+
+#scales library necessary for percent_format function to work in the plot code below
+library(scales)
 
 
+confusion_matrix_plot <- assignments %>% 
+  count(title, consensus, wt = count) %>%
+  group_by(title) %>%
+  mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(consensus, title, fill = percent)) + 
+  geom_tile() + 
+  scale_fill_gradient2(high = "red", label = percent_format()) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), 
+        panel.grid = element_blank()) +
+  labs(x = "Book words were assigned to", 
+       y = "Book words came from", 
+       fill = "% of assignments")
 
 
+wrong_words <- assignments %>% 
+  filter(title != consensus)
 
 
+wrong_words %>% 
+  count(title, consensus, term, wt = count) %>%
+  ungroup() %>%
+  arrange(desc(n))
+#above code gives slightly different counts for a few words in the head of the table
 
+
+word_counts %>% 
+  filter(word == "flopson")
+
+
+##############
+##Using the mallet package as an example of an alternative implementation of LDA below
+###########
+
+
+library(mallet)
+
+
+#create a vector with one string per chapter
+
+collapsed <- by_chapter_word %>%
+  anti_join(stop_words, by = "word") %>%
+  mutate(word = str_replace(word, "'", "")) %>%
+  group_by(document) %>%
+  summarise(text = paste(word, collapse = " "))
+
+#create an empty file of stopwords
+
+file.create(empty_file <- tempfile())
+docs <- mallet.import(collapsed$document, collapsed$text, empty_file)
+mallet_model <- MalletLDA(num.topics = 4)
+
+mallet_model$loadDocuments(docs)
+mallet_model$train(100)
+
+
+#word-topic pairs
+tidy(mallet_model)
+
+#document-topic pairs
+tidy(mallet_model, matrix = "gamma")
+
+#column needs to be named "term" for "augment"
+term_counts <- rename(word_counts, term = word)
+augment(mallet_model, term_counts)
 
 
 
